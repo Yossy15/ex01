@@ -1,0 +1,1 @@
+final url = 'https://newsapi.org/v2/everything?q=apple&from=2025-12-04&to=2025-12-04&sortBy=popularity&apiKey=ed5c6d19edd04c58b02908a641994274';
