@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:test_app_ex1/src/service/apiProvider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:test_app_ex1/src/utils/dateUtils.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key});
@@ -11,11 +14,24 @@ class SearchPage extends ConsumerStatefulWidget {
 }
 
 class _SearchPageState extends ConsumerState<SearchPage> {
+  final RefreshController _refreshController =
+      RefreshController(initialRefresh: false);
   final TextEditingController controller = TextEditingController();
+
+  void _onRefresh() async {
+    await ref.read(searchNewsProvider.future);
+    _refreshController.refreshCompleted();
+  }
+
+  void _onLoading() async {
+    await ref.read(searchNewsProvider.future);
+    _refreshController.loadComplete();
+  }
 
   @override
   void dispose() {
     controller.dispose();
+    _refreshController.dispose();
     Future.microtask(() {
       if (mounted) {
         ref.read(searchKeywordProvider.notifier).setSearchKeyword('');
@@ -27,13 +43,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final search = ref.watch(searchNewsProvider);
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            context.goNamed('homePage');
+            context.pop('homePage');
           },
         ),
         title: TextField(
@@ -61,116 +76,151 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       ),
       body: search.when(
         data: (newsList) {
-          return ListView.builder(
-            itemCount: newsList.articles.length,
-            itemBuilder: (context, index) {
-              final newsItem = newsList.articles[index];
-              final publishedDate = newsItem.publishedAt;
-              const thaiMonthAbbreviations = [
-                '', 
-                'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-                'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
-              ];
+          return SmartRefresher(
+            controller: _refreshController,
+            onRefresh: _onRefresh,
+            onLoading: _onLoading,
+            enablePullDown: true,
+            enablePullUp: true,
+            header: const MaterialClassicHeader(),
+            footer: CustomFooter(
+              builder: (BuildContext context, LoadStatus? mode) {
+                Widget body;
+                if (mode == LoadStatus.idle) {
+                  body = const Text("pull up load");
+                } else if (mode == LoadStatus.loading) {
+                  body = const CircularProgressIndicator();
+                } else if (mode == LoadStatus.failed) {
+                  body = const Text("Load Failed!Click retry!");
+                } else if (mode == LoadStatus.canLoading) {
+                  body = const Text("release to load more");
+                } else {
+                  body = const Text("No more Data");
+                }
+                return SizedBox(
+                  height: 55.0,
+                  child: Center(child: body),
+                );
+              },
+            ),
+            child: ListView.builder(
+              itemCount: newsList.articles.length,
+              itemBuilder: (context, index) {
+                final newsItem = newsList.articles[index];
+                final publishedDate = newsItem.publishedAt;
+                final formattedDate =
+                    ThaiDateUtils.formatThaiDate(publishedDate);
 
-              final thaiMonthAbbreviation = thaiMonthAbbreviations[publishedDate.month];
-              final formattedDate = '${publishedDate.day} $thaiMonthAbbreviation ${publishedDate.year} ${publishedDate.hour.toString().padLeft(2, '0')}:${publishedDate.minute.toString().padLeft(2, '0')} น.';
-
-              return GestureDetector(
-                onTap: () {
-                  context.pushNamed('detailPage', extra: newsItem);
-                },
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _imageData(newsItem),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
+                return GestureDetector(
+                  onTap: () {
+                    context.pushNamed('detailPage', extra: newsItem);
+                  },
+                  child: Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildArticleImage(newsItem),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    newsItem.source.name,
-                                    style: 
-                                      const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.blue,
-                                      ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    newsItem.title,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  if (newsItem.author != null &&
-                                      newsItem.author!.isNotEmpty)
-                                    CircleAvatar(
-                                      radius: 10,
-                                      child: Text(
-                                        newsItem.author![0].toUpperCase(),
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.white,
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        newsItem.source.name,
+                                        style: GoogleFonts.anuphan(
+                                          textStyle: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blue,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        if (newsItem.author != null)
-                                          Flexible(
-                                            child: Text(
-                                              newsItem.author!,
-                                              style: const TextStyle(
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        newsItem.title,
+                                        style: GoogleFonts.anuphan(
+                                          textStyle: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (newsItem.author != null &&
+                                          newsItem.author!.isNotEmpty)
+                                        CircleAvatar(
+                                          radius: 10,
+                                          child: Text(
+                                            newsItem.author![0].toUpperCase(),
+                                            style: GoogleFonts.anuphan(
+                                              textStyle: const TextStyle(
                                                 fontSize: 12,
+                                                color: Colors.white,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                        Text(
-                                          formattedDate,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                          ),
                                         ),
-                                      ],
-                                    ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            if (newsItem.author != null)
+                                              Flexible(
+                                                child: Text(
+                                                  newsItem.author!,
+                                                  style: GoogleFonts.anuphan(
+                                                    textStyle: const TextStyle(
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            Text(
+                                              formattedDate,
+                                              style: GoogleFonts.anuphan(
+                                                textStyle: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                          // _inofData(newsItem),
+                        ],
                       ),
-                      // _inofData(newsItem),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            );
-            },
+                );
+              },
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -180,7 +230,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 }
 
-_imageData(newsItem) {
+Widget _buildArticleImage(dynamic newsItem) {
   return Container(
     width: 105,
     decoration: BoxDecoration(

@@ -43,3 +43,15 @@ final searchNewsProvider = FutureProvider.autoDispose<News>((ref) async {
     );
   }
 });
+
+class SourceNotifier extends StateNotifier<String?> {
+  SourceNotifier() : super(null);
+
+  void setSelectedSource(String? sourceName) {
+    state = sourceName;
+  }
+}
+
+final selectedSourceNameProvider = StateNotifierProvider.autoDispose<SourceNotifier, String?>((ref) {
+  return SourceNotifier();
+});

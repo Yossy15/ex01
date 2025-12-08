@@ -6,15 +6,12 @@ class ApiService {
   final Dio _dio = Dio();
 
   Future<News> fetchNews() async {
-    try {
-      final response = await _dio.get(config.url);
+    final response = await _dio.get(config.url);
       if (response.statusCode == 200) {
+        // log((response.data));
         return News.fromJson(response.data);
       } else {
-        throw Exception('Failed to load news');
+        throw Exception('Fail');
       }
-    } catch (e) {
-      throw Exception('Failed to load news: $e');
-    }
   }
 }
