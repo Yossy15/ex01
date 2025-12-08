@@ -10,6 +10,52 @@ final newsListProvider = FutureProvider.autoDispose<News>((ref) async {
   return ref.watch(apiServiceProvider).fetchNews();
 });
 
+abstract class BaseArticleListNotifier
+    extends StateNotifier<AsyncValue<List<Article>>> {
+  BaseArticleListNotifier(this.ref) : super(const AsyncLoading()) {
+    refresh();
+  }
+
+  final Ref ref;
+
+  List<Article> transform(List<Article> articles) => articles;
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    final api = ref.read(apiServiceProvider);
+    api.resetPage();
+    try {
+      final news = await api.fetchNews();
+      state = AsyncData(transform(news.articles));
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
+  Future<void> loadMore() async {
+    final api = ref.read(apiServiceProvider);
+    api.nextPage();
+    try {
+      final news = await api.fetchNews();
+      state = state.whenData((current) {
+        final appended = [...current, ...news.articles];
+        return transform(appended);
+      });
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+}
+
+class ArticleListNotifier extends BaseArticleListNotifier {
+  ArticleListNotifier(super.ref);
+}
+
+final articleListProvider = StateNotifierProvider.autoDispose<ArticleListNotifier,
+    AsyncValue<List<Article>>>((ref) {
+  return ArticleListNotifier(ref);
+});
+
 class SearchNotifier extends StateNotifier<String> {
   SearchNotifier() : super('');
 
@@ -18,30 +64,35 @@ class SearchNotifier extends StateNotifier<String> {
   }
 }
 
-final searchKeywordProvider = StateNotifierProvider.autoDispose<SearchNotifier, String>((ref) {
+final searchKeywordProvider =
+    StateNotifierProvider<SearchNotifier, String>((ref) {
   return SearchNotifier();
 });
 
-final searchNewsProvider = FutureProvider.autoDispose<News>((ref) async {
-  final query = ref.watch(searchKeywordProvider);
-  final allNews = await ref.watch(apiServiceProvider).fetchNews();
+class SearchArticleListNotifier extends BaseArticleListNotifier {
+  SearchArticleListNotifier(super.ref);
 
-  if (query.isEmpty) {
-    return allNews;
-  } else {
-    final filteredArticles = allNews.articles
+  List<Article> _filter(List<Article> articles, String keyword) {
+    if (keyword.isEmpty) return articles;
+    final lowered = keyword.toLowerCase();
+    return articles
         .where((article) =>
-            article.title.toLowerCase().contains(query.toLowerCase()) ||
-            (article.description != null && article.description!.toLowerCase().contains(query.toLowerCase()))
-        )
+            article.title.toLowerCase().contains(lowered) ||
+            (article.description ?? '').toLowerCase().contains(lowered))
         .toList();
-        
-    return News(
-      status: allNews.status,
-      totalResults: filteredArticles.length,
-      articles: filteredArticles,
-    );
   }
+
+  @override
+  List<Article> transform(List<Article> articles) {
+    final keyword = ref.read(searchKeywordProvider);
+    return _filter(articles, keyword);
+  }
+}
+
+final searchArticleListProvider =
+    StateNotifierProvider.autoDispose<SearchArticleListNotifier,
+        AsyncValue<List<Article>>>((ref) {
+  return SearchArticleListNotifier(ref);
 });
 
 class SourceNotifier extends StateNotifier<String?> {

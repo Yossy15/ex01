@@ -17,6 +17,6 @@ class ThaiDateUtils {
 
   static String formatThaiDate(DateTime date) {
     final thaiMonthAbbreviation = thaiMonthAbbreviations[date.month];
-    return '${date.day} $thaiMonthAbbreviation ${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} น.';
+    return '${date.day} $thaiMonthAbbreviation ${date.year-1957} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} น.';
   }
 }

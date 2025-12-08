@@ -5,6 +5,7 @@ import 'package:test_app_ex1/src/service/apiProvider.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:test_app_ex1/src/utils/dateUtils.dart';
+import 'package:test_app_ex1/src/model/NewsModel.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -27,13 +28,21 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _onRefresh() async {
-    await ref.read(newsListProvider.future);
-    _refreshController.refreshCompleted();
+    try {
+      await ref.read(articleListProvider.notifier).refresh();
+      _refreshController.refreshCompleted();
+    } catch (_) {
+      _refreshController.refreshFailed();
+    }
   }
 
   void _onLoading() async {
-    await ref.read(newsListProvider.future);
-    _refreshController.loadComplete();
+    try {
+      await ref.read(articleListProvider.notifier).loadMore();
+      _refreshController.loadComplete();
+    } catch (_) {
+      _refreshController.loadFailed();
+    }
   }
 
   @override
@@ -44,7 +53,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final news = ref.watch(newsListProvider);
+    final articlesAsync = ref.watch(articleListProvider);
     final selectedSourceName = ref.watch(selectedSourceNameProvider);
 
     return Scaffold(
@@ -72,9 +81,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           )
         ],
       ),
-      body: news.when(
-        data: (newsList) {
-          final uniqueSources = newsList.articles
+      body: articlesAsync.when(
+        data: (articles) {
+          final uniqueSources = articles
               .map((article) => article.source.name)
               .where((name) => name.isNotEmpty)
               .toSet()
@@ -82,15 +91,15 @@ class _HomePageState extends ConsumerState<HomePage> {
             ..sort();
 
           final filteredArticles = selectedSourceName == null
-              ? newsList.articles
-              : newsList.articles
+              ? articles
+              : articles
                   .where((article) => article.source.name == selectedSourceName)
                   .toList();
 
           return Column(
             children: [
               ..._headText(),
-              ..._detailImgScrolll(newsList),
+              ..._detailImgScrolll(articles),
               ..._sourceScroll(uniqueSources, selectedSourceName),
               Expanded(
                 child: SmartRefresher(
@@ -316,16 +325,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     ];
   }
   
-  _detailImgScrolll(newsList) {
+  _detailImgScrolll(List<Article> articles) {
     return [
       SizedBox(
                 height: 220,
                 child: PageView.builder(
-                  itemCount: newsList.articles.length > 5
-                      ? 5
-                      : newsList.articles.length,
+                  itemCount:
+                      articles.length > 5 ? 5 : articles.length,
                   itemBuilder: (context, index) {
-                    final article = newsList.articles[index];
+                    final article = articles[index];
                     final formattedDate =
                         ThaiDateUtils.formatThaiDate(article.publishedAt);
                     return GestureDetector(

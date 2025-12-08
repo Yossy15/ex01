@@ -19,13 +19,21 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController controller = TextEditingController();
 
   void _onRefresh() async {
-    await ref.read(searchNewsProvider.future);
-    _refreshController.refreshCompleted();
+    try {
+      await ref.read(searchArticleListProvider.notifier).refresh();
+      _refreshController.refreshCompleted();
+    } catch (_) {
+      _refreshController.refreshFailed();
+    }
   }
 
   void _onLoading() async {
-    await ref.read(searchNewsProvider.future);
-    _refreshController.loadComplete();
+    try {
+      await ref.read(searchArticleListProvider.notifier).loadMore();
+      _refreshController.loadComplete();
+    } catch (_) {
+      _refreshController.loadFailed();
+    }
   }
 
   @override
@@ -42,7 +50,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final search = ref.watch(searchNewsProvider);
+    final search = ref.watch(searchArticleListProvider);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -51,31 +59,39 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             context.pop('homePage');
           },
         ),
-        title: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: controller.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      controller.clear();
-                      ref
-                          .read(searchKeywordProvider.notifier)
-                          .setSearchKeyword('');
-                    },
-                  )
-                : null,
-            border: InputBorder.none,
-            hintText: "ค้นหา",
+        title: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(50),
           ),
-          onChanged: (value) {
-            ref.read(searchKeywordProvider.notifier).setSearchKeyword(value);
-          },
+          child: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: controller.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        controller.clear();
+                        ref
+                            .read(searchKeywordProvider.notifier)
+                            .setSearchKeyword('');
+                        ref.read(searchArticleListProvider.notifier).refresh();
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              hintText: "ค้นหา",
+            ),
+            onChanged: (value) {
+              ref.read(searchKeywordProvider.notifier).setSearchKeyword(value);
+              ref.read(searchArticleListProvider.notifier).refresh();
+            },
+          ),
         ),
       ),
       body: search.when(
-        data: (newsList) {
+        data: (articles) {
           return SmartRefresher(
             controller: _refreshController,
             onRefresh: _onRefresh,
@@ -104,9 +120,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               },
             ),
             child: ListView.builder(
-              itemCount: newsList.articles.length,
+              itemCount: articles.length,
               itemBuilder: (context, index) {
-                final newsItem = newsList.articles[index];
+                final newsItem = articles[index];
                 final publishedDate = newsItem.publishedAt;
                 final formattedDate =
                     ThaiDateUtils.formatThaiDate(publishedDate);
